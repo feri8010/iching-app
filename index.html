@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#ffffff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(() => console.log('Service Worker registered'))
+      .catch(err => console.log('Service Worker registration failed:', err));
+  }
+</script>
+
+<meta charset="UTF-8" />
+<title>易経 卦表示ツール（画像＋卦名列追加）</title>
+<style>
+  /* 省略：既存のスタイルをそのまま使います */
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "メイリオ", meiryo, sans-serif;
+    font-size: 14px;
+    margin: 20px;
+  }
+  table {
+    border-collapse: collapse;
+  }
+  th, td {
+    border: 1px solid #999;
+    padding: 6px 8px;
+    vertical-align: middle;
+    text-align: center;
+  }
+  td.type {
+    width: 60px;
+    font-weight: bold;
+  }
+  td.image {
+    width: 80px;
+  }
+  td.image img {
+    width: 80%;
+    display: block;
+    margin: 0 auto;
+  }
+  td.name {
+    width: 120px;
+  }
+  td.text {
+    width: 400px;
+    white-space: pre-wrap;
+    text-align: left;
+  }
+  .input-block {
+    margin-bottom: 20px;
+  }
+  label {
+    margin-right: 10px;
+    font-weight: bold;
+  }
+  select, input {
+    padding: 4px 6px;
+    margin-right: 10px;
+    font-size: 14px;
+  }
+  button {
+    padding: 6px 12px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="input-block">
+  <label for="hexagramInput">本卦名：</label>
+  <input type="text" id="hexagramInput" placeholder="例：乾為天 または けんいてん" value="乾為天">
+  <label for="yaoInput">変爻：</label>
+ <select id="yaoInput">
+  <option value="6">初爻</option>   <!-- value=6だけど「初爻」と表示 -->
+  <option value="5">二爻</option>
+  <option value="4">三爻</option>
+  <option value="3">四爻</option>
+  <option value="2">五爻</option>
+  <option value="1">上爻</option>
+</select>
+  <button onclick="updateAll()">反映する</button>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th class="type">種別</th>
+      <th class="image">記号</th>
+      <th class="name">卦名</th>
+      <th class="text">卦辞・爻辞</th>
+    </tr>
+  </thead>
+  <tbody id="hexagramTable">
+    <tr>
+      <td class="type">本卦</td>
+      <td class="image" id="originalImage"></td>
+      <td class="name" id="originalName"></td>
+      <td class="text" id="originalText"></td>
+    </tr>
+    <tr>
+      <td class="type">変卦</td>
+      <td class="image" id="changedImage"></td>
+      <td class="name" id="changedName"></td>
+      <td class="text" id="changedText"></td>
+    </tr>
+    <tr>
+      <td class="type">互卦</td>
+      <td class="image" id="nuclearImage"></td>
+      <td class="name" id="nuclearName"></td>
+      <td class="text" id="nuclearText"></td>
+    </tr>
+    <tr>
+      <td class="type">錯卦</td>
+      <td class="image" id="reverseImage"></td>
+      <td class="name" id="reverseName"></td>
+      <td class="text" id="reverseText"></td>
+    </tr>
+    <tr>
+      <td class="type">綜卦</td>
+      <td class="image" id="inverseImage"></td>
+      <td class="name" id="inverseName"></td>
+      <td class="text" id="inverseText"></td>
+    </tr>
+  </tbody>
+</table>
+
+<script>
+  const hexagrams = [
+  {
+    number: 1,
+    nameKanji: "乾為天",
+    nameKana: "けんいてん",
+    namenumber: "01", 
+    bin: "111111",  // 上から1爻→6爻 陽=1 陰=0
+	text: "乾は元（おお）いに亨る。貞（ただ）しきに利（よ）ろし。",
+    pdfPage: 4,
+	yaoTexts: [
+      "上爻：亢竜なり。悔いあり。",
+      "五爻：飛龍天に在り。大人を見るに利ろし。",
+      "四爻：或いは躍りて淵に在り。咎なし。",
+      "三爻：君子終日乾乾し、夕べに惕若（てきじゃく）たり。厲( あや)うけれども咎（とが）なし。",
+      "二爻：見竜田にあり。大人を見るに利ろし。",
+      "初爻：潜竜なり。用うるなかれ。"
+    ]
+  },
+  {
+    number: 2,
+    nameKanji: "坤為地",
+    nameKana: "こんいち",
+    namenumber: "02", 
+    bin: "000000",
+    text: "坤は、おおいにとおる。牝馬（ひんば）の貞によろし。君子ゆくところ有るに、先んずれば迷い、後るれば主を得る。西南に朋を得、東北に朋を喪（うしな）うによろし。貞に安んずれば吉なり。",
+    pdfPage: 5,
+	yaoTexts: [
+      "上爻：竜野（や）に戦う、その血玄黄（げんおう）。",
+      "五爻：黄裳（こうしょう）、元吉（げんきつ）なり。",
+      "四爻：嚢（ふくろ）を括（くく）る。咎（とが）もなく、誉（ほまれ）もなし。",
+      "三爻：章（あや）を含みて貞にすべし。或（ある）いは王事に従うも成すことなくして終り有り。",
+      "二爻：直・方・大（ちょくほうだい）なり。習わざれば利ろしからざるなし。",
+      "初爻：霜を履（ふ）みて堅氷（けんぴょう）至る。"
+    ]
+  },
+  {
+    number: 3,
+    nameKanji: "水雷屯",
+    nameKana: "すいらいちゅん",
+    namenumber: "03", 
+    bin: "010001",
+    text: "屯は元いに亨る。貞しきに利あり。用て往くところあるなかれ。侯（きみ）を建つるに利ろし。",
+    pdfPage: 6,
+    yaoTexts: [
+      "上爻：乗馬班如（はんじょ）たり。泣血（きゅうけつ）漣如（れんじょ）たり。",
+      "五爻：その膏（めぐみ）を屯（とどこお）らす。小貞は吉。大貞は凶。",
+      "四爻：乗馬班如（はんじょ）たり。婚媾（こんこう）を求めて往けば吉、利あらざるなし",
+      "三爻：鹿に即（つ）くに虞（ぐ）なし。ただ林中に入る。君子幾をみて舎（や）むに如かず。往けば吝（りん）。",
+      "二爻：屯如（ちゅんじょ）たり。邅如（たんじょ）たり。乗馬班如（はんじょ）たり。寇（あだ）するにあらず、婚媾（こんこう）せんとす。女子貞（てい）にして字せず、十年にして乃（すなわ）ち字す。",
+	　"初爻：磐桓（はんかん）す。貞に居（お）るに利ろし。侯（きみ）を建つるに利ろし。"
+    ]
+  },
+  {
+    number: 4,
+    nameKanji: "山水蒙",
+    nameKana: "さんすいもう",
+    namenumber: "04", 
+    bin: "100010",
+    text: "蒙は、亨る。我より童蒙を求むるにあらず。童蒙より我に求む。初筮（しょぜい）は告ぐ。再三すれば瀆（けが）る。瀆るれば則ち告げず。貞しきに利ろし。",
+    pdfPage: 7,
+    yaoTexts: [
+      "上爻：蒙を撃つ。寇（あだ）をなすに利ろしからず、寇を禦（ふせ）ぐに利ろし。",
+      "五爻：童蒙、吉なり。",
+      "四爻：蒙に困（くる）しむ、吝（りん）なり。",
+      "三爻：女を取（めと）るに用うるなかれ。金夫（きんぷ）を見て、躬（み）を有（たも）たず。利しきところなし。。",
+      "二爻：蒙を包（か）ぬ、吉なり。婦（つま）を納（い）る、吉なり。子、家を克（よ）くす。",
+      "初爻：蒙を発（ひら）く。用て人を刑するに利ろし。用て桎梏（しつこく）を説き、以て往けば吝（りん）。"
+    ]
+  },
+  {
+    number: 5,
+    nameKanji: "水天需",
+    nameKana: "すいてんじゅ",
+    namenumber: "05", 
+    bin: "010111",
+    text: "需は孚（まこと）あり、光（おお）いに亨る。貞なれば吉なり。大川（たいせん）を渉（わた）るに利ろし。",
+    pdfPage: 8,
+    yaoTexts: [
+      "上爻：穴に入る。速（まね）かざるの客三人あって来（きた）る。これを敬（つつし）むときは終（つい）に吉なり。",
+      "五爻：酒食（しゅし）に需（ま）つ。貞（てい）なれば吉。",
+	  "四爻：血に需（ま）つ。穴より出（い）ず。",
+      "三爻：泥（ひじりこ）に需（ま）つ。寇（あだ）の至るを致す。",
+      "二爻：沙（すな）に需（ま）つ。小（すこ）しく言（こと）あれど、終（つい）には吉なり。",
+      "初爻：郊（こう）に需（ま）つ。恒（つね）を用うるに利あり。咎なし。"
+    ]
+  },
+  {
+    number: 6,
+    nameKanji: "天水訟",
+    nameKana: "てんすいしょう",
+    namenumber: "06", 
+    bin: "111010",
+    text: "訟は孚（まこと）ありて塞がる。惕（おそ）れて中すれば吉。終われば凶。大人を見るに利ろし。大川を渉るに利ろしからず。",
+    pdfPage: 9,
+    yaoTexts: [
+      "上爻：或いはこれに鞶帯（はんたい）を錫（たま）う。終朝（しゅうちょう）に三たびこれを褫（うば）わん。",
+      "五爻：訟（うった）え元吉（げんきつ）なり。",
+      "四爻：訟に克（か）たず。復（かえ）って命に即（つ）き、渝（かえ）りて、貞に安んずれば、吉なり。",
+      "三爻：旧徳に食（は）む。貞（てい）なれば厲（あやう）けれども終（つい）には吉。或いは王事に従うとも成すことなかれ。",
+      "二爻：訟に克（か）たず。帰りて逋（のが）る。その邑人（ゆうじん）三百戸、眚（わざわい）なし。",
+      "初爻：事とするところを永くせず。小（すこ）しく言（ものい）うことあれども、終（つい）に吉なり。"
+    ]
+  },
+  {
+    number: 7,
+    nameKanji: "地水師",
+    nameKana: "ちすいし",
+    namenumber: "07", 
+    bin: "000010",
+    text: "師は貞。丈人（じょうじん）なれば、吉にして、咎なし。",
+    pdfPage: 10,
+    yaoTexts: [
+      "上爻：大君（たいくん）命あり。国を開き家を承（う）く。小人は用うるなかれ。",
+      "五爻：田（かり）して禽（えもの）あり。執言（しつげん）に利あり。咎なし。長子師（いくさ）を帥（ひき）ゆ。弟子（ていし）尸（かばね）を輿（にな）う。貞なるも凶。",
+      "四爻：師（いくさ）左りに次（やど）る。咎なし。",
+      "三爻：師（いくさ）或いは尸（かばね）を輿（にな）う。凶なり。",
+      "二爻：師中（しちゅう）にあり。吉にして咎なし。王三たび命を錫（たま）う。",
+      "初爻：師（いくさ）出ずるに律を以てす。否（しか）らざれば臧（よ）きも凶（きょう）なり。"
+    ]
+  },
+  {
+    number: 8,
+    nameKanji: "水地比",
+    nameKana: "すいちひ",
+    namenumber: "08", 
+    bin: "010000",
+    text: "比は吉。原筮（げんぜい）するに元永貞にして、咎なし。寧からざるものまさに来る。後夫（こうふ）は凶。",
+    pdfPage: 11,
+    yaoTexts: [
+      "上爻：これに比（ひ）する、首（しゅ）たることなし、凶。",
+      "五爻：比を顕（あき）らかにす。王用（も）って三駆（さんく）して前禽（ぜんきん）を失す。邑人（ゆうじん）誡（いまし）めず。吉",
+      "四爻：外（ほか）これに比（ひ）す、貞吉（ていきち）。",
+      "三爻：これに比（ひ）する、人にあらず。",
+      "二爻：これに比（ひ）すること内よりす。貞（てい）にして吉なり。",
+      "初爻：孚ありてこれに比す。咎なし。孚ありて缶（ほとぎ）に盈（み）つれば、終（つい）に来りて他の吉あり。"
+    ]
+  },
+  {
+    number: 9,
+    nameKanji: "風天小畜",
+    nameKana: "ふうてんしょうちく",
+    namenumber: "09", 
+    bin: "110111",
+    text: "小畜は亨る。蜜雲（みつうん）して雨ふらず、わが西郊（せいこう）よりす。",
+    pdfPage:12,
+    yaoTexts: [
+      "上爻：既に雨ふり既に処（お）る。徳を尚（たっと）んで載（み）つ。婦貞なれど厲（あやう）し。月望に幾（ちか）し。君子征（ゆ）けば凶。",
+      "五爻：孚あり攣如（れんじょ）たり。富その鄰（となり）と以（とも）にす。",
+      "四爻：孚あり。血（いたみ）去り惕（おそれ）出（い）ず。咎なし。",
+      "三爻：輿輻（くるまふく）を説く。夫妻目を反（そば）む。",
+      "二爻：牽（ひ）きて復（かえ）る。吉なり。",
+      "初爻：復（かえ）ること道よりす。何ぞそれ咎あらん、吉なり。"
+    ]
+  },
+  {
+    number: 10,
+    nameKanji: "天沢履",
+    nameKana: "てんたくり",
+    namenumber: "10", 
+    bin: "111011",
+    text: "虎の尾を履（ふ）む、人を咥（くら）わず。亨（とお）る。",
+    pdfPage: 13,
+    yaoTexts: [
+      "上爻：履むを視（み）て祥（しょう）を考う。それ旋（めぐ）るときは元吉（げんきつ）なり。",
+      "五爻：夬（さだ）めて履（ふ）む。貞（てい）なれども厲（あやう）し。",
+      "四爻：虎の尾を履む。愬々たれば終には吉なり。",
+      "三爻：眇（すがめ）にして視（み）、跛（あしなえ）にして履（ふ）む。虎の尾を履（ふ）む。人を咥（くら）う。凶。武人大君（たいくん）となる。",
+      "二爻：道を履むこと坦々たり。幽人貞にして吉なり。",
+      "初爻：素履（そり）す。往くも咎（とが）なし。"
+    ]
+  },
+ {
+    number: 11,
+    nameKanji: "地天泰",
+    nameKana: "ちてんたい",
+    namenumber: "11", 
+    bin: "000111",
+    text: "小往き大来たる。吉にして亨る。",
+    pdfPage: 14,
+    yaoTexts: [
+      "上爻：城隍（ほり）に復（かえ）る。師（いくさ）を用うるなかれ。邑（ゆう）より命（めい）を告ぐ。貞（てい）なれども吝（りん）。",
+      "五爻：帝乙（ていいつ）妹（いもと）を帰（とつ）がしむ。祉（さいわ）いを以てす元吉（げんきつ）。",
+      "四爻：翩々（へんべん）として富まず、その鄰（となり）と以（とも）にす。戒めずして以て孚あり。",
+      "三爻：平（たいら）かにして陂（かたむ）かずということはなく、往きて復らずということなし。艱貞（かんてい）なれば咎なし。恤（うれ）うるなかれ、それ孚なり。食に于（おい）て福（さいわ）いあり。",
+      "二爻：荒（こう）を包（か）ね、馮河（ひょうが）を用い、遐（とお）きを遺（わす）れず、朋亡（ほろ）ぶなれば。中行（ちゅうこう）に尚（かな）うを得ん。",
+      "初爻：茅（ちがや）を抜くに茹（じょ）たり、その彙（たぐい）と以（とも）にす。往くも吉なり。"
+    ]
+  },
+	 {
+    number: 12,
+    nameKanji: "天地否",
+    nameKana: "てんちひ",
+    namenumber: "12", 
+    bin: "111000",
+    text: "否の人にあらざる、君子の貞に利あらず。大往き小来たる。",
+    pdfPage: 15,
+    yaoTexts: [
+      "上爻：否を傾く。先には否（ふさが）り後には喜ぶ。",
+      "五爻：否を止む。大人吉なり。それ亡（ほろ）びなんそれ亡びなんといいて、苞桑（ほうそう）に繋（かか）れり。",
+      "四爻：命ありて咎なし。疇（たぐい）祉（さいわい）に離（つ）く。",
+      "三爻：包羞（ほうしゅう）す。",
+      "二爻：包承（ほうしょう）す。小人は吉。大人（たいじん）は否にして亨る。",
+      "初爻：茅（ちがや）を抜くに茹（じょ）たり、その彙（たぐい）と以（とも）にす。貞なるときは吉にして亨る。"
+    ]
+  },
+	 {
+    number: 13,
+    nameKanji: "天火同人",
+    nameKana: "てんかどうじん",
+    namenumber: "13", 
+    bin: "111101",
+    text: "人に同じうにするに野（や）に于（おい）てす。亨る。大川を渉（わた）るに利あり。君子の貞に利あり。",
+    pdfPage: 16,
+    yaoTexts: [
+      "上爻：人に同じうするに郊（こう）に于（おい）てす。悔いなし。",
+      "五爻：人に同じうするに先には号（さけ）び咷（よば）いて後には笑う。大師（だいし）克（か）ちて相い遇（あ）う。",
+      "四爻：その墉（よう）に乗る。攻むる克（あた）わず。吉なり。",
+      "三爻：戎（つわもの）を莽（もう）に伏し、その高陵（こうりょう）に升（のぼ）る。三歳まで興（おこ）さず。",
+      "二爻：人に同じうするに宗（そう）に于（おい）てす。吝（りん）なり。",
+      "初爻：人に同じうするに門に于（おい）てす。咎なし。"
+    ]
+  },
+	 {
+    number: 14,
+    nameKanji: "火天大有",
+    nameKana: "かてんたいゆう",
+    namenumber: "14", 
+    bin: "101111",
+    text: "大有は、元（おお）いに亨る。",
+    pdfPage: 17,
+    yaoTexts: [
+      "上爻：天よりこれを祐（たす）く。吉にして利あらざるなし。",
+      "五爻：その孚（まこと）あって交如（こうじょ）たり。威如（いじょ）たるときは、吉なり。",
+      "四爻：その彭（さかん）なるにあらず。咎なし。",
+      "三爻：公用（もっ）て天子に亨（きょう）す。小人は克（あた）わず。",
+      "二爻：大車（だいしゃ）以て載（の）す。往くところあり、咎なし。",
+      "初爻：害に交（わた）ることなし。咎あるにあらず。艱（なや）むときは咎なし。"
+   ]
+	 },
+	 {
+    number: 15,
+    nameKanji: "地山謙",
+    nameKana: "ちざんけん",
+    namenumber: "15", 
+    bin: "000100",
+    text: "謙は亨（とお）る。君子は終わりあり。",
+    pdfPage: 18,
+    yaoTexts: [
+      "上爻：鳴謙（めいけん）す。用て師（いくさ）を行（や）り、邑国（ゆうこく）を征するに利あり。",
+      "五爻：富まず、その鄰（となり）と以（とも）にす。用て侵伐（しんばつ）するに利あり。利あらざるなし。",
+      "四爻：利あらざるなし、謙を撝（ふる）え。",
+      "三爻：労謙（ろうけん）たる君子。終わりあり吉。",
+      "二爻：鳴謙（めいけん）す。貞にして吉なり。",
+      "初爻：謙々たる君子。用（もっ）て大川（たいせん）を渉（わた）る、吉なり。"
+    ]
+  },
+	 {
+    number: 16,
+    nameKanji: "雷地豫",
+    nameKana: "らいちよ",
+    namenumber: "16", 
+    bin: "001000",
+    text: "侯（きみ）を建て師（いくさ）を行（や）るに利あり。",
+    pdfPage: 19,
+    yaoTexts: [
+      "上爻：冥（めい）豫す。成るも渝（かわ）ることあり。咎（とが）なし。",
+      "五爻：貞（てい）にして疾（や）む。恒（つね）に死せず。",
+      "四爻：由（ゆう）豫す。大いに得るあり。疑うなかれ、朋（とも）盍簪（あいあつま）る。",
+      "三爻：盱（く）豫す。悔ゆ。遅ければ悔いあり。",
+      "二爻：石に介たり。日に終えず。貞（てい）にして吉なり。",
+      "初爻：鳴（めい）豫す。凶なり。"
+    ]
+  },
+	 {
+    number: 17,
+    nameKanji: "沢雷随",
+    nameKana: "たくらいずい",
+    namenumber: "17", 
+    bin: "011001",
+    text: "随は、元いに亨る貞しきに利あり。咎なし。",
+    pdfPage: 20,
+    yaoTexts: [
+      "上爻：これを拘（とら）え係（くく）る。乃（すなわ）ち従ってこれを維（つな）ぐ。王用（もっ）て西山（せいざん）に亨（きょう）す。",
+      "五爻：嘉（か）に孚（まこと）あり。吉なり。",
+      "四爻：随って獲（う）るあり。貞（てい）なれども凶。孚（まこと）あって道に在り、以て明らかなれば、何の咎（とが）あらん。",
+      "三爻：丈夫（じょうふ）に係りて、小子（しょうし）を失う。随って求むるあれば得。貞に居（お）るに利あり。",
+      "二爻：小子（しょうし）係りて、丈夫（じょうふ）を失う。",
+      "初爻：官渝（かわ）ることあり。貞（てい）なれば吉。門を出でて交わるに功あり。"
+    ]
+  },
+	 {
+    number: 18,
+    nameKanji: "山風蠱",
+    nameKana: "さんぷうこ",
+    namenumber: "18", 
+    bin: "100110",
+    text: "蠱は、元いに亨る。大川を渉（わた）るに利あり。甲に先だつこと三日、甲に後るること三日。",
+    pdfPage: 21,
+    yaoTexts: [
+      "上爻：王侯に事（つか）えず、その事を高尚にす。",
+      "五爻：父の蠱（こと）に幹（かん）たり、用（もっ）て誉あり。",
+      "四爻：父の蠱（こと）を裕（ゆる）うす。往くときは吝（りん）を見る。",
+      "三爻：父の蠱（こと）に幹（かん）たり。小（すこ）しく悔いあり、大なる咎なし。",
+      "二爻：母の蠱（こと）に幹（かん）たり。貞（てい）にすべからず。",
+      "初爻：父の蠱（こ）を干（おか）す。子有り。考ふれど咎なし。厲（あやう）しも終（つい）に吉。"
+    ]
+  },
+	 {
+    number: 19,
+    nameKanji: "地沢臨",
+    nameKana: "ちたくりん",
+    namenumber: "19", 
+    bin: "000011",
+    text: "臨は、元いに亨る貞しきに利あり。八月に至りて凶あり。",
+    pdfPage: 22,
+    yaoTexts: [
+      "上爻：臨むに敦（あつ）し。吉にして咎（とが）なし。",
+      "五爻：知あって臨む。大君の宜（ぎ）なり。",
+      "四爻：至りて臨む。咎なし。",
+      "三爻：甘んじて臨む。利するところなし。既にこれを憂うれば、咎なし。",
+      "二爻：咸（かん）じて臨む。吉にして利あらざるなし。",
+      "初爻：咸（かん）じて臨む。貞にして吉なり。"
+		
+    ]
+  },
+	 {
+    number: 20,
+    nameKanji: "風地観",
+    nameKana: "ふうちかん",
+    namenumber: "20", 
+    bin: "110000",
+    text: "観は、盥（かん）して薦せず、孚あって顒若（ぎょうじゃく）たり。",
+    pdfPage: 23,
+    yaoTexts: [
+      "上爻：その生を観る。君子なるときは咎（とが）なし。",
+      "五爻：我が生を観る。君子なるときは咎（とが）なし。",
+      "四爻：国の光を観る。用（もっ）て王に賓（ひん）たるに利あり。",
+      "三爻：我が生を観て進退す。",
+      "二爻：闚（き）観す。女貞（じょてい）に利あり。",
+      "初爻：童（どう）観す。小人は咎なし。君子は吝（りん）。"
+    ]
+  },
+	 {
+    number: 21,
+    nameKanji: "火雷噬嗑",
+    nameKana: "からいぜいごう",
+    namenumber: "21", 
+    bin: "101001",
+    text: "噬嗑は、亨（とお）る。獄（ごく）を用うるに利あり。",
+    pdfPage: 24,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 22,
+    nameKanji: "山火賁",
+    nameKana: "さんかひ",
+    namenumber: "22", 
+    bin: "100101",
+    text: "賁は、亨（とお）る。小（すこ）しく往くところあるに利あり。",
+    pdfPage: 25,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 23,
+    nameKanji: "山地剥",
+    nameKana: "さんちはく",
+    namenumber: "23", 
+    bin: "100000",
+    text: "剥は、往くところあるに利あらず。",
+    pdfPage: 26,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 24,
+    nameKanji: "地雷復",
+    nameKana: "ちらいふく",
+    namenumber: "24", 
+    bin: "000001",
+    text: "復は、亨（とお）る。出入り疾（やまい）なし。朋（とも）来りて咎なし。その道を反復す。七日にして来り復す。往くところに利あり。",
+    pdfPage: 27,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 25,
+    nameKanji: "天雷无妄",
+    nameKana: "てんらいむぼう",
+    namenumber: "25", 
+    bin: "111001",
+    text: "无妄は、元いに亨る貞しきに利あり。それ正にあらざれば眚（わざわい）あり。往くところあるに利あらず。",
+    pdfPage: 28,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 26,
+    nameKanji: "山天大畜",
+    nameKana: "さんてんたいちく",
+    namenumber: "26", 
+    bin: "100111",
+    text: "大畜は、貞（ただ）しきに利あり。家食（かしょく）せずして、吉なり。大川（たいせん）を渉（わた）るに利あり。",
+    pdfPage: 29,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 27,
+    nameKanji: "山雷頤",
+    nameKana: "さんらいい",
+    namenumber: "27", 
+    bin: "100001",
+    text: "頤（い）は、貞（ただ）しければ吉。頤を観る。自ら口実を求む。",
+    pdfPage: 30,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+
+    ]
+  },
+	 {
+    number: 28,
+    nameKanji: "沢風大過",
+    nameKana: "たくふうたいか",
+    namenumber: "28", 
+    bin: "011110",
+    text: "大過は、棟撓（むなぎたわ）めり。往くところあるに利あり。亨（とお）る。",
+    pdfPage: 31,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+
+    ]
+  },
+	 {
+    number: 29,
+    nameKanji: "坎為水",
+    nameKana: "かんいすい",
+    namenumber: "29", 
+    bin: "010010",
+    text: "習坎（しゅうかん）は、孚（まこと）あり。維（こ）れ心亨（とお）る。行けば尚（たっと）ぶことあり。",
+    pdfPage: 32,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+
+    ]
+  },
+	 {
+    number: 30,
+    nameKanji: "離為火",
+    nameKana: "りいか",
+    namenumber: "30", 
+    bin: "101101",
+    text: "離は、貞（ただ）しきに利あり。亨（とお）る。牝牛を畜（やしな）う、吉なり。",
+    pdfPage: 33,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 31,
+    nameKanji: "沢山咸",
+    nameKana: "たくさんかん",
+    namenumber: "31", 
+    bin: "011100",
+    text: "咸は、亨（とお）る。貞（ただ）しきに利あり。女（じょ）を取（めと）るときは吉なり。",
+    pdfPage: 34,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 32,
+    nameKanji: "雷風恒",
+    nameKana: "らいふうこう",
+    namenumber: "32", 
+    bin: "001110",
+    text: "恒は、亨（とお）る。咎（とが）なし。貞（ただ）しきに利あり。往くところあるに利あり。",
+    pdfPage: 35,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 33,
+    nameKanji: "天山遯",
+    nameKana: "てんざんとん",
+    namenumber: "33", 
+    bin: "111100",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 36,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  }, 
+	 {
+    number: 34,
+    nameKanji: "雷天大壮",
+    nameKana: "らいてんたいそう",
+    namenumber: "34", 
+    bin: "001111",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 37,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 35,
+    nameKanji: "火地晋",
+    nameKana: "かちしん",
+    namenumber: "35", 
+    bin: "101000",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 38,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 36,
+    nameKanji: "地火明夷",
+    nameKana: "ちかめいい",
+    namenumber: "36", 
+    bin: "000101",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 39,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 37,
+    nameKanji: "風火家人",
+    nameKana: "ふうかかじん",
+    namenumber: "37", 
+    bin: "110101",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 40,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 38,
+    nameKanji: "火沢睽",
+    nameKana: "かたくけい",
+    namenumber: "38", 
+    bin: "101011",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 41,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 39,
+    nameKanji: "水山蹇",
+    nameKana: "すいざんけん",
+    namenumber: "39", 
+    bin: "010100",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 42,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 40,
+    nameKanji: "雷水解",
+    nameKana: "らいすいかい",
+    namenumber: "40", 
+    bin: "001010",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 43,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 41,
+    nameKanji: "山沢損",
+    nameKana: "さんたくそん",
+    namenumber: "41", 
+    bin: "100011",
+    pdfPage: 44,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 42,
+    nameKanji: "風雷益",
+    nameKana: "ふうらいえき",
+    namenumber: "42", 
+    bin: "110001",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 45,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 43,
+    nameKanji: "沢天夬",
+    nameKana: "たくてんけつ",
+    namenumber: "43", 
+    bin: "011111",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 46,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 44,
+    nameKanji: "天風姤",
+    nameKana: "てんぷうこう",
+    namenumber: "44", 
+    bin: "111110",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 47,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 45,
+    nameKanji: "沢地萃",
+    nameKana: "たくちすい",
+    namenumber: "45", 
+    bin: "011000",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 48,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 46,
+    nameKanji: "地風升",
+    nameKana: "ちふうしょう",
+    namenumber: "46", 
+    bin: "000110",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 49,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 47,
+    nameKanji: "沢水困",
+    nameKana: "たくすいこん",
+    namenumber: "47", 
+    bin: "011010",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 50,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 48,
+    nameKanji: "水風井",
+    nameKana: "すいふうせい",
+    namenumber: "48", 
+    bin: "010110",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 51,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 49,
+    nameKanji: "沢火革",
+    nameKana: "たくかかく",
+    namenumber: "49", 
+    bin: "011101",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 52,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 50,
+    nameKanji: "火風鼎",
+    nameKana: "かふうてい",
+    namenumber: "50", 
+    bin: "101110",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 53,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 51,
+    nameKanji: "震為雷",
+    nameKana: "しんいらい",
+    namenumber: "51", 
+    bin: "001001",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 54,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 52,
+    nameKanji: "艮為山",
+    nameKana: "ごんいさん",
+    namenumber: "52", 
+    bin: "100100",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 55,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 53,
+    nameKanji: "風山漸",
+    nameKana: "ふうざんぜん",
+    namenumber: "53", 
+    bin: "110100",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 56,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 54,
+    nameKanji: "雷沢帰妹",
+    nameKana: "らいたくきまい",
+    namenumber: "54", 
+    bin: "001011",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 57,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 55,
+    nameKanji: "雷火豊",
+    nameKana: "らいかほう",
+    namenumber: "55", 
+    bin: "001101",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 58,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 56,
+    nameKanji: "火山旅",
+    nameKana: "かざんりょ",
+    namenumber: "56", 
+    bin: "101100",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 59,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 57,
+    nameKanji: "巽為風",
+    nameKana: "そんいふう",
+    namenumber: "57", 
+    bin: "110110",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 60,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 58,
+    nameKanji: "兌為沢",
+    nameKana: "だいたく",
+    namenumber: "58", 
+    bin: "011011",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 61,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 59,
+    nameKanji: "風水渙",
+    nameKana: "ふうすいかん",
+    namenumber: "59", 
+    bin: "110010",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 62,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 60,
+    nameKanji: "水沢節",
+    nameKana: "すいたくせつ",
+    namenumber: "60", 
+    bin: "010011",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 63,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 61,
+    nameKanji: "風沢中孚",
+    nameKana: "ふうたくちゅうう",
+    namenumber: "61", 
+    bin: "110011",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 64,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 62,
+    nameKanji: "雷山小過",
+    nameKana: "らいさんしょうか",
+    namenumber: "62", 
+    bin: "001100",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 65,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 63,
+    nameKanji: "水火既済",
+    nameKana: "すいかきせい",
+    namenumber: "63", 
+    bin: "010101",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 66,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+	 {
+    number: 64,
+    nameKanji: "火水未済",
+    nameKana: "かすいびせい",
+    namenumber: "64", 
+    bin: "101010",
+    text: "需は貞にして吉。大川を渉るに利し。",
+    pdfPage: 67,
+    yaoTexts: [
+      "上爻：",
+      "五爻：",
+      "四爻：",
+      "三爻：",
+      "二爻：",
+      "初爻："
+    ]
+  },
+  ];
+
+function findHexagram(name) {
+  return hexagrams.find(h => h.nameKanji === name || h.nameKana === name || h.namenumber === name) || null;
+}
+
+function flipLine(bin, line) {
+  if (!line) return bin;
+  const idx = line - 1;
+  let arr = bin.split("");
+  arr[idx] = arr[idx] === "1" ? "0" : "1";
+  return arr.join("");
+}
+
+function makeNuclear(baseBin, changedBin) {
+  return baseBin[1]+baseBin[2]+baseBin[3]+changedBin[2]+changedBin[3]+changedBin[4];
+}
+
+function invert(bin) { return bin.split("").map(b => b==="1"?"0":"1").join(""); }
+function reverse(bin) { return bin.split("").reverse().join(""); }
+
+function makeText(hex, line) {
+  if(!hex) return "（未登録）";
+  let text = hex.number + "： " + hex.nameKanji + "\n" + hex.text;
+  if(line && hex.yaoTexts && hex.yaoTexts[line-1]) text += "\n\n" + hex.yaoTexts[line-1];
+  return text;
+}
+
+function setRow(idPrefix, hex, bin, line) {
+  const imgName = hex ? String(hex.number).padStart(2,'0') + "_" + hex.nameKanji + ".png" : "notfound.png";
+  document.getElementById(idPrefix + "Image").innerHTML = `<img src="img/${imgName}" alt="${hex?hex.nameKanji:''}">`;
+
+  if(hex && hex.pdfPage){
+    document.getElementById(idPrefix + "Name").innerHTML =
+      `<a href="hexagrams.pdf#page=${hex.pdfPage}" target="_blank">${hex.nameKanji}</a>`;
+  } else {
+    document.getElementById(idPrefix + "Name").innerText = hex ? hex.nameKanji : "（未登録）";
+  }
+
+  document.getElementById(idPrefix + "Text").innerText = makeText(hex,line);
+}
+
+function updateAll() {
+  const inputName = document.getElementById("hexagramInput").value.trim();
+  const changingLine = parseInt(document.getElementById("yaoInput").value);
+  const baseHex = findHexagram(inputName);
+  if(!baseHex){ alert("指定された卦名は登録されていません"); return; }
+
+  setRow("original", baseHex, baseHex.bin, changingLine);
+
+  const changedBin = flipLine(baseHex.bin, changingLine);
+  const changedHex = hexagrams.find(h=>h.bin===changedBin) || null;
+  setRow("changed", changedHex, changedBin, changingLine);
+
+  const nuclearBin = makeNuclear(baseHex.bin, changedBin);
+  const nuclearHex = hexagrams.find(h=>h.bin===nuclearBin) || null;
+  setRow("nuclear", nuclearHex, nuclearBin, changingLine);
+
+  const invertedBin = invert(baseHex.bin);
+  const invertedHex = hexagrams.find(h=>h.bin===invertedBin) || null;
+  setRow("reverse", invertedHex, invertedBin, changingLine);
+
+  const reversedBin = reverse(baseHex.bin);
+  const reversedHex = hexagrams.find(h=>h.bin===reversedBin) || null;
+  setRow("inverse", reversedHex, reversedBin, changingLine);
+}
+
+window.onload = updateAll;
+</script>
+</body>
+</html>
