@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="img/icon-192.png">
 <link rel="manifest" href="manifest.json">
 <canvas id="pdf-canvas"></canvas>
-<script type="module" src="./main.mjs">
+<script type="module" src="main.mjs">
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js')
       .then(reg => console.log("Service Worker registered"))
@@ -1260,7 +1260,7 @@ function setRow(idPrefix, hex, bin, line) {
 
   if(hex && hex.pdfPage){
   document.getElementById(idPrefix + "Name").innerHTML =
-    `<a href="pdfjs/web/viewer.html?file=../hexagrams.pdf#page=${hex.pdfPage}" target="_blank">${hex.nameKanji}</a>`;
+    `<a href="viewer.html?file=hexagrams.pdf#page=${hex.pdfPage}" target="_blank">${hex.nameKanji}</a>`;
 } else {
     document.getElementById(idPrefix + "Name").innerText = hex ? hex.nameKanji : "（未登録）";
   }
