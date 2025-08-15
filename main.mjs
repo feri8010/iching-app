@@ -1,5 +1,5 @@
-import * as pdfjsLib from './pdf.mjs';
-pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.mjs';
+import * as pdfjsLib from 'pdf.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs';
 
 // PDF を読み込む
 const loadingTask = pdfjsLib.getDocument('sample.pdf');
