@@ -1258,9 +1258,9 @@ function setRow(idPrefix, hex, bin, line) {
   document.getElementById(idPrefix + "Image").innerHTML = `<img src="img/${imgName}" alt="${hex?hex.nameKanji:''}">`;
 
   if(hex && hex.pdfPage){
-    document.getElementById(idPrefix + "Name").innerHTML =
-      `<a href="hexagrams.pdf#page=${hex.pdfPage}" target="_blank">${hex.nameKanji}</a>`;
-  } else {
+  document.getElementById(idPrefix + "Name").innerHTML =
+    `<a href="pdfjs/web/viewer.html?file=../hexagrams.pdf#page=${hex.pdfPage}" target="_blank">${hex.nameKanji}</a>`;
+} else {
     document.getElementById(idPrefix + "Name").innerText = hex ? hex.nameKanji : "（未登録）";
   }
 
