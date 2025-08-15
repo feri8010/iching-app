@@ -1,32 +1,70 @@
 // main.js
-
-// PDF.js ライブラリの読み込み
 import * as pdfjsLib from './pdf.js';
-import './pdf_viewer.js';
+import { PDFViewerApplicationOptions } from './pdf_viewer.js';
 
-// ワーカーの指定
+// Workerの指定
 pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.js';
 
-// PDF Viewer の初期化
-document.addEventListener('DOMContentLoaded', () => {
-    if (typeof PDFViewerApplication !== 'undefined') {
-        // タッチ操作を有効化（タブレット対応）
-        PDFViewerApplicationOptions.set('enableTouch', true);
+// PDFビューアのオプション設定
+PDFViewerApplicationOptions.set('enableTouch', true);
+PDFViewerApplicationOptions.set('defaultZoomValue', 'page-width');
 
-        // PDFファイルをロード（例: sample.pdf を同階層に置く）
-        PDFViewerApplication.open('sample.pdf');
+// PDFをロードして表示
+async function loadPDF(url) {
+    const loadingTask = pdfjsLib.getDocument(url);
+    const pdfDocument = await loadingTask.promise;
 
-        // ページジャンプ用のイベント例
-        const pageInput = document.getElementById('page-number');
-        if (pageInput) {
-            pageInput.addEventListener('change', (e) => {
-                const page = parseInt(e.target.value, 10);
-                if (!isNaN(page)) {
-                    PDFViewerApplication.page = page;
-                }
-            });
-        }
-    } else {
-        console.error('PDFViewerApplication が未定義です。pdf_viewer.js が正しく読み込まれているか確認してください。');
+    const container = document.getElementById('viewerContainer');
+    container.innerHTML = ''; // 前回の内容をクリア
+
+    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+        const page = await pdfDocument.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        container.appendChild(canvas);
+
+        const renderContext = {
+            canvasContext: canvas.getContext('2d'),
+            viewport: viewport,
+        };
+        await page.render(renderContext).promise;
     }
-});
+}
+
+// ページジャンプ用の関数
+async function goToPage(url, pageNumber) {
+    const loadingTask = pdfjsLib.getDocument(url);
+    const pdfDocument = await loadingTask.promise;
+
+    if (pageNumber < 1 || pageNumber > pdfDocument.numPages) {
+        alert(`ページ番号は1～${pdfDocument.numPages}の範囲です`);
+        return;
+    }
+
+    const page = await pdfDocument.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1.5 });
+
+    const container = document.getElementById('viewerContainer');
+    container.innerHTML = ''; // 既存ページをクリア
+
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    container.appendChild(canvas);
+
+    const renderContext = {
+        canvasContext: canvas.getContext('2d'),
+        viewport: viewport,
+    };
+    await page.render(renderContext).promise;
+}
+
+// 初期表示PDFを指定
+const pdfUrl = './sample.pdf'; // 表示したいPDFファイル名
+loadPDF(pdfUrl);
+
+// 例：ページジャンプ用（必要に応じてフォームのイベントに接続）
+window.goToPage = (pageNumber) => goToPage(pdfUrl, pageNumber);
