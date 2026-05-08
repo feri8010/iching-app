@@ -2004,36 +2004,39 @@ function updateAll() {
   const inputName = document.getElementById("hexagramInput").value.trim();
   const changingLine = parseInt(document.getElementById("yaoInput").value);
   const baseHex = findHexagram(inputName);
+  
   if (!baseHex) { alert("指定された卦名は登録されていません"); return; }
 
-  // 本卦
+  // 1. 本卦
   setRow("original", baseHex, baseHex.bin, changingLine);
   setTranslationRow("original", baseHex, changingLine);
 
-  // 変卦
+  // 2. 変卦
   const changedBin = flipLine(baseHex.bin, changingLine);
   const changedHex = hexagrams.find(h => h.bin === changedBin) || null;
   setRow("changed", changedHex, changedBin, changingLine);
   setTranslationRow("changed", changedHex, changingLine);
 
-  // 互卦（本卦の2〜5爻から作成）
+  // 3. 互卦 (baseBinから作成)
   const nuclearBin = makeNuclear(baseHex.bin);
   const nuclearHex = hexagrams.find(h => h.bin === nuclearBin) || null;
-  setRow("nuclear", nuclearHex, nuclearBin, null);
-  setTranslationRow("nuclear", nuclearHex, null);
+  // 第4引数を changingLine に戻すことで線と爻辞を表示
+  setRow("nuclear", nuclearHex, nuclearBin, changingLine);
+  setTranslationRow("nuclear", nuclearHex, changingLine);
 
-  // 錯卦（裏卦：全反転）
+  // 4. 裏卦 (invert)
   const invertedBin = invert(baseHex.bin);
   const invertedHex = hexagrams.find(h => h.bin === invertedBin) || null;
-  setRow("reverse", invertedHex, invertedBin, null);
-  setTranslationRow("reverse", invertedHex, null);
+  setRow("reverse", invertedHex, invertedBin, changingLine);
+  setTranslationRow("reverse", invertedHex, changingLine);
 
-  // 綜卦（180度回転）
+  // 5. 綜卦 (reverse)
   const reversedBin = reverse(baseHex.bin);
   const reversedHex = hexagrams.find(h => h.bin === reversedBin) || null;
-  setRow("inverse", reversedHex, reversedBin, null);
-  setTranslationRow("inverse", reversedHex, null);
+  setRow("inverse", reversedHex, reversedBin, changingLine);
+  setTranslationRow("inverse", reversedHex, changingLine);
 }
+
 
 
 window.onload = updateAll;
