@@ -1940,26 +1940,32 @@
 },
   ];
 
+// --- 修正版ロジック ---
+
 function findHexagram(name) {
   return hexagrams.find(h => h.nameKanji === name || h.nameKana === name || h.namenumber === name) || null;
 }
 
 function flipLine(bin, line) {
   if (!line) return bin;
+  // HTMLが上=1, 下=6なので、そのままインデックス(0〜5)として扱える
   const idx = line - 1;
   let arr = bin.split("");
   arr[idx] = arr[idx] === "1" ? "0" : "1";
   return arr.join("");
 }
 
-function makeNuclear(baseBin, changedBin) {
-  return baseBin[1] + baseBin[2] + baseBin[3] + changedBin[2] + changedBin[3] + changedBin[4];
+function makeNuclear(baseBin) {
+  // 互卦のロジック（HTMLの「上が1」というルールに準拠）
+  // 2・3・4爻（下卦）：bin[4], bin[3], bin[2]
+  // 3・4・5爻（上卦）：bin[3], bin[2], bin[1]
+  // これを易のデータ形式（上から順 5-4-3-4-3-2）に並べる
+  return baseBin[1] + baseBin[2] + baseBin[3] + baseBin[2] + baseBin[3] + baseBin[4];
 }
 
 function invert(bin) { return bin.split("").map(b => b === "1" ? "0" : "1").join(""); }
 function reverse(bin) { return bin.split("").reverse().join(""); }
 
-// 原文テキスト（卦辞＋爻辞）
 function makeText(hex, line) {
   if (!hex) return "（未登録）";
   let text = hex.number + "： " + hex.nameKanji + "\n" + hex.text;
@@ -1969,13 +1975,10 @@ function makeText(hex, line) {
   return text;
 }
 
-// 翻訳テキスト（卦辞翻訳＋爻辞翻訳）
 function makeTranslation(hex, line) {
   if (!hex || !hex.translation) return "（翻訳未登録）";
-
-  let text = hex.translation.gua; // 卦辞の翻訳
+  let text = hex.translation.gua;
   if (line && hex.translation.yao && hex.translation.yao[line - 1]) {
-    // 卦辞と爻辞の間に区切り線を入れる
     text += "\n\n────────────────────────\n\n" + hex.translation.yao[line - 1];
   }
   return text;
@@ -1984,20 +1987,17 @@ function makeTranslation(hex, line) {
 function setRow(idPrefix, hex, bin, line) {
   const imgName = hex ? String(hex.number).padStart(2, '0') + "_" + hex.nameKanji + ".png" : "notfound.png";
   document.getElementById(idPrefix + "Image").innerHTML = `<img src="img/${imgName}" alt="${hex ? hex.nameKanji : ''}">`;
-
   if (hex && hex.pdfPage) {
-    document.getElementById(idPrefix + "Name").innerHTML =
-      `<a href="hexagrams.pdf#page=${hex.pdfPage}" target="_blank">${hex.nameKanji}</a>`;
+    document.getElementById(idPrefix + "Name").innerHTML = `<a href="hexagrams.pdf#page=${hex.pdfPage}" target="_blank">${hex.nameKanji}</a>`;
   } else {
     document.getElementById(idPrefix + "Name").innerText = hex ? hex.nameKanji : "（未登録）";
   }
-
   document.getElementById(idPrefix + "Text").innerText = makeText(hex, line);
 }
 
-// 翻訳列に出力する
 function setTranslationRow(idPrefix, hex, line) {
-  document.getElementById(idPrefix + "Translation").innerText = makeTranslation(hex, line);
+  const target = document.getElementById(idPrefix + "Translation");
+  if (target) target.innerText = makeTranslation(hex, line);
 }
 
 function updateAll() {
@@ -2016,24 +2016,25 @@ function updateAll() {
   setRow("changed", changedHex, changedBin, changingLine);
   setTranslationRow("changed", changedHex, changingLine);
 
-  // 互卦
-  const nuclearBin = makeNuclear(baseHex.bin, changedBin);
+  // 互卦（本卦の2〜5爻から作成）
+  const nuclearBin = makeNuclear(baseHex.bin);
   const nuclearHex = hexagrams.find(h => h.bin === nuclearBin) || null;
-  setRow("nuclear", nuclearHex, nuclearBin, changingLine);
-  setTranslationRow("nuclear", nuclearHex, changingLine);
+  setRow("nuclear", nuclearHex, nuclearBin, null);
+  setTranslationRow("nuclear", nuclearHex, null);
 
-  // 錯卦
+  // 錯卦（裏卦：全反転）
   const invertedBin = invert(baseHex.bin);
   const invertedHex = hexagrams.find(h => h.bin === invertedBin) || null;
-  setRow("reverse", invertedHex, invertedBin, changingLine);
-  setTranslationRow("reverse", invertedHex, changingLine);
+  setRow("reverse", invertedHex, invertedBin, null);
+  setTranslationRow("reverse", invertedHex, null);
 
-  // 綜卦
+  // 綜卦（180度回転）
   const reversedBin = reverse(baseHex.bin);
   const reversedHex = hexagrams.find(h => h.bin === reversedBin) || null;
-  setRow("inverse", reversedHex, reversedBin, changingLine);
-  setTranslationRow("inverse", reversedHex, changingLine);
+  setRow("inverse", reversedHex, reversedBin, null);
+  setTranslationRow("inverse", reversedHex, null);
 }
+
 
 window.onload = updateAll;
 </script>
